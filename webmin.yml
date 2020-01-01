@@ -1,0 +1,51 @@
+---
+- hosts: all
+  user: root
+  become: yes
+
+  vars_prompt:
+  - name: webminport
+    prompt: "In CORE, under Device Page > Passwords > Load Passwords > Webmin Button, what is the Webmin port?"
+    private: no
+
+ 
+  tasks:
+   - name: Install Webmin repo
+     template: 
+       src: webmin.repo.j2
+       dest: /etc/yum.repos.d/webmin.repo
+
+   - name: Install GPG key
+     rpm_key:
+       state: present
+       key: http://www.webmin.com/jcameron-key.asc
+
+   - name: Install the webmin package and the perl package for SSL support
+     yum: 
+       name: "{{ packages }}"
+       state: installed 
+     vars:
+       packages:
+       - webmin
+       - perl-Net-SSLeay
+
+     
+   - name: Change the port Webmin listens on to match what's listed in Core
+     replace:
+       path: /etc/webmin/miniserv.conf
+       regexp: '10000'
+       replace: '{{ webminport }}'
+
+   - name: Open firewall port
+     iptables: 
+       chain: INPUT
+       protocol: tcp
+       destination_port: '{{ webminport }}' 
+       jump: ACCEPT
+       action: insert
+
+   - name: Start webmin
+     command: service webmin restart
+     args:
+       warn: false
+
