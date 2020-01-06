@@ -38,18 +38,23 @@
 
    - name: Check if firewalld is running
      command: systemctl status firewalld 
-     register: result
+     register: fdresult
+     ignore_errors: yes
+
+   - name: Check if iptables is running
+     command: systemctl status iptables
+     register: ipresult
      ignore_errors: yes
 
    - name: Open firewall port (firewalld + custom port)
      firewalld: port={{ item }}/tcp permanent=yes state=enabled
      with_items: '{{ webminport }}'
-     when: result is success and webminport != ""
+     when: fdresult is success and webminport != ""
 
    - name: Open firewall port (firewalld + default port)
      firewalld: port={{ item }}/tcp permanent=yes state=enabled
      with_items: '10000'
-     when: result is success and webminport == ""
+     when: fdresult is success and webminport == ""
 
    - name: Open firewall port (iptables + custom port)
      iptables: 
@@ -58,7 +63,7 @@
        destination_port: '{{ webminport }}' 
        jump: ACCEPT
        action: insert
-     when: result is failed and webminport != ""
+     when: ipresult is success and webminport != ""
 
    - name: Open firewall port (iptables + default port)
      iptables: 
@@ -67,7 +72,7 @@
        destination_port: '10000' 
        jump: ACCEPT
        action: insert
-     when: result is failed and webminport == ""
+     when: ipresult is success and webminport == ""
 
    - name: Start webmin
      command: service webmin restart
