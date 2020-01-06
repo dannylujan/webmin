@@ -5,7 +5,7 @@
 
   vars_prompt:
   - name: webminport
-    prompt: "\e[32m***************\n* CORE Device *\n***************\n\e[0mCORE assigns a custom port for Webmin to use\nIn CORE, under Device Page > Passwords > Load Passwords > Webmin Button, enter the Webmin port.\n\n\e[32m****************\n* Cloud Device *\n****************\e[0m\nBy default, Webmin port is 10000, if you wish to change the port, enter it below.\n\n\e[1mPort Number\e[0m"
+    prompt: "\e[32m***************\n* CORE Device *\n***************\n\e[0mCORE assigns a custom port for Webmin to use\nIn CORE, under Device Page > Passwords > Load Passwords > Webmin Button, enter the Webmin port.\n\n\e[32m****************\n* Cloud Device *\n****************\e[0m\nBy default, Webmin port is 10000, if you wish to change the port, enter it below. If you want to leave it default, press enter.\n\n\e[1mPort Number\e[0m"
     private: no
 
  
@@ -28,7 +28,6 @@
        packages:
        - webmin
        - perl-Net-SSLeay
-
      
    - name: Change the port Webmin listens on to match what's listed in Core
      replace:
@@ -37,25 +36,38 @@
        replace: '{{ webminport }}'
      when: webminport != ""
 
+   - name: Check if firewalld is running
+     command: systemctl status firewalld 
+     register: result
+     ignore_errors: yes
 
-   - name: Open firewall port
+   - name: Open firewall port (firewalld + custom port)
+     firewalld: port={{ item }}/tcp permanent=yes state=enabled
+     with_items: '{{ webminport }}'
+     when: result is success and webminport != ""
+
+   - name: Open firewall port (firewalld + default port)
+     firewalld: port={{ item }}/tcp permanent=yes state=enabled
+     with_items: '10000'
+     when: result is success and webminport == ""
+
+   - name: Open firewall port (iptables + custom port)
      iptables: 
        chain: INPUT
        protocol: tcp
        destination_port: '{{ webminport }}' 
        jump: ACCEPT
        action: insert
-     when: webminport != ""
+     when: result is failed and webminport != ""
 
-   - name: Open firewall port
+   - name: Open firewall port (iptables + default port)
      iptables: 
        chain: INPUT
        protocol: tcp
        destination_port: '10000' 
        jump: ACCEPT
        action: insert
-     when: webminport == ""
-
+     when: result is failed and webminport == ""
 
    - name: Start webmin
      command: service webmin restart
